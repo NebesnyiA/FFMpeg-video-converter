@@ -11,6 +11,7 @@ using System.IO;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Xabe.FFmpeg;
+using Xabe.FFmpeg.Downloader;
 using FFMpeg_video_converter.SignalRHub;
 using Microsoft.AspNetCore.SignalR;
 
@@ -22,7 +23,7 @@ namespace FFMpeg_video_converter.Controllers
         private IWebHostEnvironment _appEnvironment;
 
         public static IHubContext<ProgressHub> hub;
-        public static CancellationTokenSource token = new System.Threading.CancellationTokenSource();
+        public static CancellationTokenSource token = new CancellationTokenSource();
 
         public HomeController(ILogger<HomeController> logger, IWebHostEnvironment appEnvironment, IHubContext<ProgressHub> hubContext)
         {
@@ -30,7 +31,18 @@ namespace FFMpeg_video_converter.Controllers
             _appEnvironment = appEnvironment;
             hub = hubContext;
 
-            FFmpeg.SetExecutablesPath(Path.Combine(appEnvironment.ContentRootPath, "ffmpeg"));
+            string ffmpegPass = Path.Combine(_appEnvironment.ContentRootPath, "ffmpeg");
+
+            if (!Directory.Exists(ffmpegPass))
+            {
+                Directory.CreateDirectory(ffmpegPass);
+            }
+            if (!(Directory.Exists(Path.Combine(ffmpegPass, "ffmpeg.exe"))
+                && Directory.Exists(Path.Combine(ffmpegPass, "ffprobe.exe"))))
+            {
+                FFmpegDownloader.GetLatestVersion(FFmpegVersion.Official, ffmpegPass).GetAwaiter().GetResult();
+            }
+            FFmpeg.SetExecutablesPath(ffmpegPass);
         }
 
         public IActionResult Main()
