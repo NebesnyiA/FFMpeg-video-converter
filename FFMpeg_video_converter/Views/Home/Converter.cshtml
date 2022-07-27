@@ -1,5 +1,67 @@
-﻿@*
-    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
-*@
-@{
-}
+﻿@model FileModel
+
+<body lang="en">
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/js/microsoft/signalr/dist/browser/signalr.min.js"></script>
+
+    <label id="file">File name: @Model.fileName</label><br>
+    <input type="submit" value="@Model.fileName" onclick="ConvertFile(this)">
+    <a href="~/Files/sample-5s.avi" download="">dowload</a>
+
+    <div id="progress">
+
+    </div>
+
+    <script>
+        var lastProgress = 0;
+        var cancelToken;
+
+        const hubConnection = new signalR.HubConnectionBuilder()
+            .withUrl("/progresshub")
+            .build();
+
+        hubConnection.on("Progress", function (progress, fileName) {
+            var obj = "";
+
+            obj = '<input type="submit" value="stop" onclick="Stop()"/>'
+            $("#progress").append(obj);
+
+            if (lastProgress < progress) {
+                lastProgress = progress;
+                obj = '<label>' + progress + '</label><br>';
+                $("#progress").append(obj);
+            }
+
+            if (progress == 100) {
+                obj = '<a href="/ConvertedFiles/' + fileName + '" download="">download</a>';
+                $("#progress").append(obj);
+            }
+        });
+
+        hubConnection.start();
+    </script>
+
+    <script type="text/javascript">
+        var fileName = "";
+
+        function ConvertFile(obj) {
+            fileName = obj.value;
+
+            alert(fileName);
+            $.ajax({
+                url: "/Home/ConvertFile",
+                data: { fileName: fileName }
+            });
+        }
+
+        function Stop() {
+            $.ajax({
+                url: "/Home/CancelConversion",
+                success: function (result) {
+                    alert(result);
+                }
+
+            });
+        }
+    </script>
+</body>
