@@ -5,11 +5,14 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.IO;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Xabe.FFmpeg;
+using FFMpeg_video_converter.SignalRHub;
+using Microsoft.AspNetCore.SignalR;
 
 namespace FFMpeg_video_converter.Controllers
 {
@@ -18,10 +21,14 @@ namespace FFMpeg_video_converter.Controllers
         private readonly ILogger<HomeController> _logger;
         private IWebHostEnvironment _appEnvironment;
 
-        public HomeController(ILogger<HomeController> logger, IWebHostEnvironment appEnvironment)
+        public static IHubContext<ProgressHub> hub;
+        public static CancellationTokenSource token = new System.Threading.CancellationTokenSource();
+
+        public HomeController(ILogger<HomeController> logger, IWebHostEnvironment appEnvironment, IHubContext<ProgressHub> hubContext)
         {
             _logger = logger;
             _appEnvironment = appEnvironment;
+            hub = hubContext;
 
             FFmpeg.SetExecutablesPath(Path.Combine(appEnvironment.ContentRootPath, "ffmpeg"));
         }
@@ -47,9 +54,17 @@ namespace FFMpeg_video_converter.Controllers
             return Content("Upload error");
         }
 
-        public async Task<IActionResult> Converter(string fileName)
+        public IActionResult Converter(string fileName)
         {
-            FileModel model = new FileModel();
+            FileModel file = new FileModel();
+            file.fileName = fileName;
+            file.convertedFilePath = Path.Combine(_appEnvironment.WebRootPath, "ConvertedFiles", Path.ChangeExtension(fileName, "avi"));
+
+            return View(file);
+        }
+
+        public async Task ConvertFile(string fileName)
+        {
 
             string inputFile = Path.Combine(_appEnvironment.WebRootPath, "Files", fileName);
             string outputFile = Path.Combine(_appEnvironment.WebRootPath, "ConvertedFiles", Path.ChangeExtension(fileName, "avi"));
@@ -61,10 +76,24 @@ namespace FFMpeg_video_converter.Controllers
                 ?.SetCodec(VideoCodec.mjpeg);
 
             IConversion conversion = FFmpeg.Conversions.New()
-                .AddStream(audioStream, videoStream)
+                .AddStream(audioStream ,videoStream)
                 .SetOutput(outputFile);
 
-            return Content(conversion.Start().ToString());
+            conversion.OnProgress += (sender, args) =>
+            {
+                var percent = (int)(Math.Round(args.Duration.TotalSeconds / args.TotalLength.TotalSeconds, 2) * 100);
+                hub.Clients.All.SendAsync("Progress", percent, Path.ChangeExtension(fileName, "avi"));
+                Debug.WriteLine(percent);
+            };
+
+            await conversion.Start(token.Token);
+        }
+
+        public string CancelConversion()
+        {
+            token.Cancel();
+
+            return "Stoped conversion";
         }
 
         [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
