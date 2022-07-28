@@ -6,7 +6,6 @@
 
     <label id="file">File name: @Model.fileName</label><br>
     <input type="submit" value="@Model.fileName" onclick="ConvertFile(this)">
-    <a href="~/Files/sample-5s.avi" download="">dowload</a>
 
     <div id="progress">
 
@@ -14,13 +13,12 @@
 
     <script>
         var lastProgress = 0;
-        var cancelToken;
 
         const hubConnection = new signalR.HubConnectionBuilder()
             .withUrl("/progresshub")
             .build();
 
-        hubConnection.on("Progress", function (progress, fileName) {
+        hubConnection.on("Progress", function (progress, file) {
             var obj = "";
 
             obj = '<input type="submit" value="stop" onclick="Stop()"/>'
@@ -33,16 +31,17 @@
             }
 
             if (progress == 100) {
-                obj = '<a href="/ConvertedFiles/' + fileName + '" download="">download</a>';
+                obj = '<a href="/ConvertedFiles/' + file + '" download="">download</a>';
                 $("#progress").append(obj);
+                RemoveConvObj();
             }
         });
 
-        hubConnection.start();
-    </script>
+        var conId = "";
 
-    <script type="text/javascript">
-        var fileName = "";
+        hubConnection.start().then(() => {
+            conId = hubConnection.connectionId;
+        });
 
         function ConvertFile(obj) {
             fileName = obj.value;
@@ -50,13 +49,25 @@
             alert(fileName);
             $.ajax({
                 url: "/Home/ConvertFile",
-                data: { fileName: fileName }
+                data: { fileName: fileName, connectionId: conId }
+            });
+        }
+    </script>
+
+    <script type="text/javascript">
+        var fileName = "";
+
+        function RemoveConvObj() {
+            $.ajax({
+                url: "/Home/RemoveConversion",
+                data: { fileName: fileName },
             });
         }
 
         function Stop() {
             $.ajax({
                 url: "/Home/CancelConversion",
+                data: { fileName: fileName },
                 success: function (result) {
                     alert(result);
                 }
