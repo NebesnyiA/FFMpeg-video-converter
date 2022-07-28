@@ -4,9 +4,91 @@
 }
 
 <body lang="en">
-    <form asp-action="AddFile" asp-controller="Home" method="post" enctype="multipart/form-data">
-        <label>Choose file to upload </label>
-        <input type="file" value="Upload" name="file" /><br>
-        <input type="submit" value="Submit" />
-    </form>
+    @*<form asp-action="AddFile" asp-controller="Home" method="post" enctype="multipart/form-data">
+            <label>Choose file to upload </label>
+            <input type="file" value="Upload" name="file" /><br>
+            <input type="submit" value="Submit" />
+        </form>*@
+
+    <link href="~/css/main.css" rel="stylesheet" asp-append-version="true">
+
+    @*@<div class="wrapper">
+            <div class="board">
+                <div class="info-zone">
+                    <label>FFMpeg file converter</label><br>
+                    <label>Simple student project with usage of FFmpeg library to convert video files</label><br>
+                    <label>Provides possibility to convert video files to AVI format</label>
+                </div>
+
+                <div class="upload-zone">
+                    <form asp-action="AddFile" asp-controller="Home" method="post" enctype="multipart/form-data">
+                        <label>Choose file to upload </label>
+                        <input type="file" value="Upload" name="file" /><br>
+                        <input type="submit" value="Submit" />
+                    </form>
+                </div>
+
+                <div class="confirm-zone">
+
+                </div>
+
+            </div>
+        </div>*@
+
+    <table>
+        <tr>
+            <td><input type="file" id="file" /></td>
+        </tr>
+
+        <tr>
+            <td><input type="button" id="btnUpload" value="Upload"></td>
+        </tr>
+
+        <tr>
+            <td colspan="2"><progress id="fileProgress" style="display: none"></progress></td>
+        </tr>
+    </table>
+
+    <span id="lblMessage"></span>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+
+    <script>
+
+        $('body').on("click", "#btnUpload", function () {
+            var formData = new FormData();
+            formData.append("file", $('#file')[0].files[0]);
+
+            $.ajax({
+                url: "/Home/UploadFile",
+                type: 'Post',
+                data: formData,
+                cache: false,
+                contentType: false,
+                processData: false,
+                success: function (fileName) {
+                    $('#fileProgress').hide();
+                    //$('#lblMessage').html("<b>" + fileName + "</b> has been uploaded.");
+                    var url = '@Url.Action("Converter", "Home", new { fileName = "__fileName__" })';
+                    window.location.href = url.replace("__fileName__", fileName);
+                },
+                xhr: function () {
+                    var filexhr = $.ajaxSettings.xhr();
+                    if (filexhr.upload) {
+                        $("progress").show();
+                        filexhr.upload.addEventListener("progress", function (e) {
+                            if (e.lengthComputable) {
+                                $('#fileProgress').attr({
+                                    value: e.loaded,
+                                    max: e.total
+                                });
+                            }
+                        }, false);
+                    }
+                    return filexhr;
+                }
+            });
+        });
+
+    </script>
 </body>
