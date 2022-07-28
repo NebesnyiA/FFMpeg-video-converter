@@ -14,6 +14,7 @@ using Xabe.FFmpeg;
 using Xabe.FFmpeg.Downloader;
 using FFMpeg_video_converter.SignalRHub;
 using Microsoft.AspNetCore.SignalR;
+using FFMpeg_video_converter.Utils;
 
 namespace FFMpeg_video_converter.Controllers
 {
@@ -24,6 +25,8 @@ namespace FFMpeg_video_converter.Controllers
 
         public static IHubContext<ProgressHub> hub;
         public static CancellationTokenSource token = new CancellationTokenSource();
+
+        static Dictionary<string, FileModel> filesToConvert = new Dictionary<string, FileModel>();
 
         public HomeController(ILogger<HomeController> logger, IWebHostEnvironment appEnvironment, IHubContext<ProgressHub> hubContext)
         {
@@ -50,20 +53,30 @@ namespace FFMpeg_video_converter.Controllers
             return View();
         }
 
-        public IActionResult AddFile(IFormFile file)
+
+        [HttpPost]
+        [RequestFormLimits(MultipartBodyLengthLimit = 1073741824)]
+        [RequestSizeLimit(1073741824)]
+        public async Task<string> UploadFile(IFormFile file)
         {
             if(file != null)
             {
-                string path = Path.Combine(_appEnvironment.WebRootPath, "Files", file.FileName);
-                using (FileStream fileStream = new FileStream(path, FileMode.Create))
+                string path = Path.Combine(_appEnvironment.WebRootPath, "Files");
+                if (!Directory.Exists(path))
                 {
-                    file.CopyTo(fileStream);
+                    Directory.CreateDirectory(path);
                 }
 
-                return RedirectToAction("Converter", new { fileName = file.FileName });
-            }
+                using (FileStream stream = new FileStream(Path.Combine(path, file.FileName), FileMode.Create))
+                {
+                    await file.CopyToAsync(stream);
+                    stream.Flush();
+                }
 
-            return Content("Upload error");
+                //return RedirectToAction("Converter", new { fileName = file.FileName });
+                return file.FileName;
+            }
+            return "Upload_error";
         }
 
         public IActionResult Converter(string fileName)
@@ -75,35 +88,37 @@ namespace FFMpeg_video_converter.Controllers
             return View(file);
         }
 
-        public async Task ConvertFile(string fileName)
+        public async Task ConvertFile(string fileName, string connectionId)
         {
-
             string inputFile = Path.Combine(_appEnvironment.WebRootPath, "Files", fileName);
             string outputFile = Path.Combine(_appEnvironment.WebRootPath, "ConvertedFiles", Path.ChangeExtension(fileName, "avi"));
 
-            IMediaInfo mediaInfo = await FFmpeg.GetMediaInfo(inputFile);
-            IStream audioStream = mediaInfo.AudioStreams.FirstOrDefault()
-                ?.SetCodec(AudioCodec.mp3);
-            IStream videoStream = mediaInfo.VideoStreams.FirstOrDefault()
-                ?.SetCodec(VideoCodec.mjpeg);
+            ConvertClass convertProcesses = new ConvertClass();
+            //FileModel fileForConvert = convertProcesses.GetFileObject(inputFile, outputFile);
 
-            IConversion conversion = FFmpeg.Conversions.New()
-                .AddStream(audioStream ,videoStream)
-                .SetOutput(outputFile);
+            filesToConvert.Add(fileName, convertProcesses.GetFileObject(inputFile, outputFile));
+            filesToConvert[fileName].fileName = fileName;
 
-            conversion.OnProgress += (sender, args) =>
+            filesToConvert[fileName].conversion.OnProgress += (sender, args) =>
             {
                 var percent = (int)(Math.Round(args.Duration.TotalSeconds / args.TotalLength.TotalSeconds, 2) * 100);
-                hub.Clients.All.SendAsync("Progress", percent, Path.ChangeExtension(fileName, "avi"));
+                //hub.Clients.All.SendAsync("Progress", percent, Path.ChangeExtension(fileName, "avi"));
+                hub.Clients.Client(connectionId).SendAsync("Progress", percent, Path.ChangeExtension(fileName, "avi"));
                 Debug.WriteLine(percent);
             };
 
-            await conversion.Start(token.Token);
+            await filesToConvert[fileName].conversion.Start(filesToConvert[fileName].token.Token);
         }
 
-        public string CancelConversion()
+        public void RemoveConversion(string fileName)
         {
-            token.Cancel();
+            filesToConvert.Remove(fileName);
+        }
+
+        public string CancelConversion(string fileName)
+        {
+            filesToConvert[fileName].token.Cancel();
+            RemoveConversion(fileName);
 
             return "Stoped conversion";
         }
