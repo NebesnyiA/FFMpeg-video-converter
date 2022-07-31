@@ -59,7 +59,7 @@ namespace FFMpeg_video_converter.Controllers
         [RequestSizeLimit(1073741824)]
         public async Task<string> UploadFile(IFormFile file)
         {
-            if(file != null)
+            if (file != null)
             {
                 string path = Path.Combine(_appEnvironment.WebRootPath, "Files");
                 if (!Directory.Exists(path))
@@ -73,41 +73,49 @@ namespace FFMpeg_video_converter.Controllers
                     stream.Flush();
                 }
 
-                //return RedirectToAction("Converter", new { fileName = file.FileName });
                 return file.FileName;
             }
             return "Upload_error";
         }
 
-        public IActionResult Converter(string fileName)
+        [HttpPost]
+        public IActionResult Converter(string resolution, string format, List<string> file)
         {
-            FileModel file = new FileModel();
-            file.fileName = fileName;
-            file.convertedFilePath = Path.Combine(_appEnvironment.WebRootPath, "ConvertedFiles", Path.ChangeExtension(fileName, "avi"));
+            string filePath = Path.Combine(_appEnvironment.WebRootPath, "Files");
+            string outputPath = Path.Combine(_appEnvironment.WebRootPath, "ConvertedFiles");
+            if (!Directory.Exists(outputPath))
+            {
+                Directory.CreateDirectory(outputPath);
+            }
 
-            return View(file);
+            ConvertPageModel model = new ConvertPageModel();
+
+            model.resolution = resolution;
+            model.FileList = file;
+            model.format = format;
+
+            return View(model);
         }
 
-        public async Task ConvertFile(string fileName, string connectionId)
+        public async Task ConvertFile(string fileName, string connectionId, string format, string resolution)
         {
             string inputFile = Path.Combine(_appEnvironment.WebRootPath, "Files", fileName);
-            string outputFile = Path.Combine(_appEnvironment.WebRootPath, "ConvertedFiles", Path.ChangeExtension(fileName, "avi"));
+            string outputFile = Path.Combine(_appEnvironment.WebRootPath, "ConvertedFiles", Path.ChangeExtension(fileName, format));
 
-            ConvertClass convertProcesses = new ConvertClass();
-            //FileModel fileForConvert = convertProcesses.GetFileObject(inputFile, outputFile);
+            ConvertClass convertProcesses = new ConvertClass(inputFile, outputFile, format, resolution);
 
-            filesToConvert.Add(fileName, convertProcesses.GetFileObject(inputFile, outputFile));
+            filesToConvert.Add(fileName, convertProcesses.GetFileObject());
             filesToConvert[fileName].fileName = fileName;
 
             filesToConvert[fileName].conversion.OnProgress += (sender, args) =>
             {
                 var percent = (int)(Math.Round(args.Duration.TotalSeconds / args.TotalLength.TotalSeconds, 2) * 100);
-                //hub.Clients.All.SendAsync("Progress", percent, Path.ChangeExtension(fileName, "avi"));
                 hub.Clients.Client(connectionId).SendAsync("Progress", percent, Path.ChangeExtension(fileName, "avi"));
                 Debug.WriteLine(percent);
             };
 
             await filesToConvert[fileName].conversion.Start(filesToConvert[fileName].token.Token);
+            RemoveConversion(fileName);
         }
 
         public void RemoveConversion(string fileName)
