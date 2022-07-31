@@ -16,65 +16,73 @@ namespace FFMpeg_video_converter.Utils
         private IStream _videoStream;
         private IStream _audioStream;
 
-        public FileModel GetFileObject(string inputFile, string outputFile)
+        private string _input;
+        private string _output;
+        private string _format;
+        private string _resolution;
+
+        public ConvertClass(string input, string output, string format, string resolution)
         {
-            FileModel fileForConvert = new FileModel();
-
-            fileForConvert.token = new CancellationTokenSource();
-            fileForConvert.conversion = GetConversionObject(inputFile, outputFile).GetAwaiter().GetResult();
-            fileForConvert.convertedFilePath = outputFile;
-            fileForConvert.originalFilePath = inputFile;
-
-            return fileForConvert;
+            _input = input;
+            _output = output;
+            _format = format;
+            _resolution = resolution;
         }
 
-        private async Task<IConversion> GetConversionObject(string inputFile, string outputFile)
+        public FileModel GetFileObject()
         {
-            string format = Path.GetExtension(outputFile);
-            IMediaInfo mediaInfo = await FFmpeg.GetMediaInfo(inputFile);
+            FileModel file = new FileModel();
 
-            switch (format) 
-            {
-                case "avi":
-                    GetAVIStream(mediaInfo);
-                    break;
-                case "mp4":
-                    GetMP4Stream(mediaInfo);
-                    break;
-                case "mov":
-                    GetMOVStream(mediaInfo);
-                    break;
-            }
+            file.token = new CancellationTokenSource();
+            file.convertedFilePath = _output;
+            file.originalFilePath = _input;
+            file.conversion = GetConversion().GetAwaiter().GetResult();
+
+            return file;
+        }
+
+        private async Task<IConversion> GetConversion()
+        {
+            await SetCodecs();
 
             IConversion conversion = FFmpeg.Conversions.New()
                 .AddStream(_audioStream, _videoStream)
-                .SetOutput(outputFile);
+                .SetOutput(_output);
 
             return conversion;
         }
 
-        private void GetAVIStream(IMediaInfo info)
+        private async Task SetCodecs()
         {
-            _audioStream = info.AudioStreams.FirstOrDefault()
-                ?.SetCodec(AudioCodec.mp3);
-            _videoStream = info.VideoStreams.FirstOrDefault()
-                ?.SetCodec(VideoCodec.mjpeg);
-        }
+            IMediaInfo mediaInfo = await FFmpeg.GetMediaInfo(_input);
+            int width = 0;
+            int height = 0;
+            if(_resolution == "original")
+            {
+                width = mediaInfo.VideoStreams.FirstOrDefault().Width;
+                height = mediaInfo.VideoStreams.FirstOrDefault().Height;
+            }
+            else
+            {
+                width = Convert.ToInt32(_resolution.Split("x").First());
+                height = Convert.ToInt32(_resolution.Split("x").Last());
+            }
 
-        private void GetMOVStream(IMediaInfo info)
-        {
-            _audioStream = info.AudioStreams.FirstOrDefault()
-                ?.SetCodec(AudioCodec.mp3);
-            _videoStream = info.VideoStreams.FirstOrDefault()
-                ?.SetCodec(VideoCodec.mpeg4);
-        }
-
-        private void GetMP4Stream(IMediaInfo info)
-        {
-            _audioStream = info.AudioStreams.FirstOrDefault()
-                ?.SetCodec(AudioCodec.aac);
-            _videoStream = info.VideoStreams.FirstOrDefault()
-                ?.SetCodec(VideoCodec.h264);
+            switch (_format) 
+            {
+                case "avi":
+                    _videoStream = mediaInfo.VideoStreams.FirstOrDefault()?.SetCodec(VideoCodec.mjpeg)?.SetSize(width, height);
+                    _audioStream = mediaInfo.AudioStreams.FirstOrDefault()?.SetCodec(AudioCodec.mp3);
+                    break;
+                case "mp4":
+                    _videoStream = mediaInfo.VideoStreams.FirstOrDefault()?.SetCodec(VideoCodec.h264)?.SetSize(width, height);
+                    _audioStream = mediaInfo.AudioStreams.FirstOrDefault()?.SetCodec(AudioCodec.aac);
+                    break;
+                case "mov":
+                    _videoStream = mediaInfo.VideoStreams.FirstOrDefault()?.SetCodec(VideoCodec.mpeg4)?.SetSize(width, height);
+                    _audioStream = mediaInfo.AudioStreams.FirstOrDefault()?.SetCodec(AudioCodec.mp3);
+                    break;
+            }
         }
     }
 }
