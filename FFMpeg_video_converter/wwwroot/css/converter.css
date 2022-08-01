@@ -1,0 +1,77 @@
+﻿body {
+    padding: 0;
+    margin: 0;
+}
+
+.layout {
+    display: flex;
+    align-items: center;
+    width: 1280px;
+    height: 118px;
+    background: #304040;
+    box-shadow: 0px 4px 4px rgba(0, 0, 0, 0.25);
+}
+
+    .layout label {
+        margin-left: 30px;
+        color: #C9D1C8;
+        font-size: 50px;
+    }
+
+.board {
+    overflow: auto;
+    width: 1280px;
+    height: 700px;
+    background: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.file {
+    margin-left: 30px;
+    margin-top: 10px;
+    width: 1100px;
+    height: 40px;
+    background: #C9D1C8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: row;
+    border-radius: 10px;
+    box-shadow: 0px 4px 4px rgba(0, 0, 0, 0.25);
+}
+
+    .file button {
+        width: 152px;
+        height: 31px;
+        border: none;
+        border-radius: 5px;
+        background-color: #5B7065;
+        color: white;
+    }
+
+    .file label {
+        width: 200px;
+    }
+
+    .file progress {
+        margin-right: 10px;
+        margin-left: 180px;
+        width: 500px;
+        height: 10px;
+        border-radius: 5px;
+        background-color: white;
+    }
+
+    .file a {
+        color: whitesmoke;
+        border: solid;
+        border-radius: 5px;
+        border-color: #304040;
+        background-color: #5B7065;
+    }
+
+.conversion-stopped {
+    color: red;
+}

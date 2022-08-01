@@ -1,5 +1,116 @@
-﻿@*
-    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
-*@
-@{
-}
+﻿@model ConvertPageModel
+
+<body lang="en">
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/js/microsoft/signalr/dist/browser/signalr.min.js"></script>
+    <link href="~/css/converter.css" rel="stylesheet" asp-append-version="true">
+
+    <input type="hidden" id="format" value="@Model.format" />
+    <input type="hidden" id="resolution" value="@Model.resolution">
+
+    <div>
+        <div class="layout">
+            <label>FFMpeg video converter</label>
+        </div>
+
+        <div class="file">
+            <label>FileName</label>
+            <label class="conversion-stopped">Conversion stopped</label>
+        </div>
+
+        <div class="board">
+
+            @foreach (var fileName in Model.FileList)
+            {
+                <div id="@fileName" class="file">
+                    <label>@fileName</label>
+                    <progress id="@("p_" + fileName)" value="0"></progress>
+                    <button value="@fileName" onclick="Stop(this)">Cancel</button>
+                </div>
+            }
+        </div>
+
+    </div>
+
+    <script type="text/javascript">
+        var conId = "";
+        var files = [];
+
+        const hubConnection = new signalR.HubConnectionBuilder()
+            .withUrl("/progresshub")
+            .build();
+
+        hubConnection.on("Progress", function (progress, currentFile, conversionResult) {
+            var obj = "";
+
+            var elem = document.getElementById(currentFile);
+
+            $(elem).children('progress').attr({
+                value: progress,
+                max: 100
+            });
+
+            if (progress == 100) {
+                obj = '<a href="/ConvertedFiles/' + conversionResult + '" download="">Download</a>';
+
+                $(elem).children('button').remove();
+                $(elem).children('a').remove();
+                $(elem).append(obj);
+
+                RemoveConvObj(currentFile);
+            }
+        });
+
+        hubConnection.start().then(() => {
+            conId = hubConnection.connectionId;
+            alert(conId);
+
+            StartConversion();
+        });
+
+        function StartConversion() {
+            $('.board').children().each(function () {
+                files.push($(this).attr('id'));
+            });
+
+            for (var i = 0; i < files.length; i++) {
+                ConvertFile(files[i]);
+            }
+        }
+
+        function ConvertFile(fileName) {
+            var format = $('#format').val();
+            var resolution = $('#resolution').val();
+
+            $.ajax({
+                url: "/Home/ConvertFile",
+                data: { fileName: fileName, connectionId: conId, format: format, resolution: resolution },
+            });
+        }
+
+        function RemoveConvObj(fileName) {
+            $.ajax({
+                url: "/Home/RemoveConversion",
+                data: { fileName: fileName },
+            });
+        }
+
+        function Stop(obj) {
+            var fileName = $(obj).val();
+
+            $.ajax({
+                url: "/Home/CancelConversion",
+                data: { fileName: fileName },
+                success: function (result) {
+                    var obj = '<label class="conversion-stopped">Conversion has been stopped</label>'
+
+                    var elem = document.getElementById(fileName);
+                    $(elem).children('progress').remove();
+                    $(elem).children('button').remove();
+                    $(elem).append(obj);
+                }
+
+            });
+        }
+    </script>
+</body>

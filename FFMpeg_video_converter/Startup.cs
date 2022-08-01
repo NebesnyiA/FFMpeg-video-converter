@@ -8,6 +8,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.SignalR;
+using FFMpeg_video_converter.SignalRHub;
 
 namespace FFMpeg_video_converter
 {
@@ -24,6 +26,7 @@ namespace FFMpeg_video_converter
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddControllersWithViews();
+            services.AddSignalR();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -51,6 +54,7 @@ namespace FFMpeg_video_converter
                 endpoints.MapControllerRoute(
                     name: "default",
                     pattern: "{controller=Home}/{action=Main}/{id?}");
+                endpoints.MapHub<ProgressHub>("/progresshub");
             });
         }
     }

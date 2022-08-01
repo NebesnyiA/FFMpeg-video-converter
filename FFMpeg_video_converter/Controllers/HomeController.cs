@@ -5,11 +5,16 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.IO;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Xabe.FFmpeg;
+using Xabe.FFmpeg.Downloader;
+using FFMpeg_video_converter.SignalRHub;
+using Microsoft.AspNetCore.SignalR;
+using FFMpeg_video_converter.Utils;
 
 namespace FFMpeg_video_converter.Controllers
 {
@@ -18,10 +23,29 @@ namespace FFMpeg_video_converter.Controllers
         private readonly ILogger<HomeController> _logger;
         private IWebHostEnvironment _appEnvironment;
 
-        public HomeController(ILogger<HomeController> logger, IWebHostEnvironment appEnvironment)
+        public static IHubContext<ProgressHub> hub;
+        public static CancellationTokenSource token = new CancellationTokenSource();
+
+        static Dictionary<string, FileModel> filesToConvert = new Dictionary<string, FileModel>();
+
+        public HomeController(ILogger<HomeController> logger, IWebHostEnvironment appEnvironment, IHubContext<ProgressHub> hubContext)
         {
             _logger = logger;
             _appEnvironment = appEnvironment;
+            hub = hubContext;
+
+            string ffmpegPass = Path.Combine(_appEnvironment.ContentRootPath, "ffmpeg");
+
+            if (!Directory.Exists(ffmpegPass))
+            {
+                Directory.CreateDirectory(ffmpegPass);
+            }
+            if (!(Directory.Exists(Path.Combine(ffmpegPass, "ffmpeg.exe"))
+                && Directory.Exists(Path.Combine(ffmpegPass, "ffprobe.exe"))))
+            {
+                FFmpegDownloader.GetLatestVersion(FFmpegVersion.Official, ffmpegPass).GetAwaiter().GetResult();
+            }
+            FFmpeg.SetExecutablesPath(ffmpegPass);
         }
 
         public IActionResult Main()
@@ -29,25 +53,82 @@ namespace FFMpeg_video_converter.Controllers
             return View();
         }
 
-        public IActionResult AddFile(IFormFile file)
+
+        [HttpPost]
+        [RequestFormLimits(MultipartBodyLengthLimit = 1073741824)]
+        [RequestSizeLimit(1073741824)]
+        public async Task<string> UploadFile(IFormFile file)
         {
-            if(file != null)
+            if (file != null)
             {
-                string path = Path.Combine(_appEnvironment.WebRootPath, "Files", file.FileName);
-                using (FileStream fileStream = new FileStream(path, FileMode.Create))
+                string path = Path.Combine(_appEnvironment.WebRootPath, "Files");
+                if (!Directory.Exists(path))
                 {
-                    file.CopyTo(fileStream);
+                    Directory.CreateDirectory(path);
                 }
 
-                return Content("File was uploaded, path: " + Path.Combine(_appEnvironment.ContentRootPath, "Files", file.FileName));
-            }
+                using (FileStream stream = new FileStream(Path.Combine(path, file.FileName), FileMode.Create))
+                {
+                    await file.CopyToAsync(stream);
+                    stream.Flush();
+                }
 
-            return Content("Upload error");
+                return file.FileName;
+            }
+            return "Upload_error";
         }
 
-        public async Task<IActionResult> ConvertFile()
+        [HttpPost]
+        public IActionResult Converter(string resolution, string format, List<string> file)
         {
-            return Content("No file uploaded");
+            string filePath = Path.Combine(_appEnvironment.WebRootPath, "Files");
+            string outputPath = Path.Combine(_appEnvironment.WebRootPath, "ConvertedFiles");
+            if (!Directory.Exists(outputPath))
+            {
+                Directory.CreateDirectory(outputPath);
+            }
+
+            ConvertPageModel model = new ConvertPageModel();
+
+            model.resolution = resolution;
+            model.FileList = file;
+            model.format = format;
+
+            return View(model);
+        }
+
+        public async Task ConvertFile(string fileName, string connectionId, string format, string resolution)
+        {
+            string convertedFileName = Path.ChangeExtension(fileName, format);
+            string inputFile = Path.Combine(_appEnvironment.WebRootPath, "Files", fileName);
+            string outputFile = Path.Combine(_appEnvironment.WebRootPath, "ConvertedFiles", convertedFileName);
+
+            ConvertClass convertProcesses = new ConvertClass(inputFile, outputFile, format, resolution);
+
+            filesToConvert.Add(fileName, convertProcesses.GetFileObject());
+            filesToConvert[fileName].fileName = fileName;
+
+            filesToConvert[fileName].conversion.OnProgress += (sender, args) =>
+            {
+                var percent = (int)(Math.Round(args.Duration.TotalSeconds / args.TotalLength.TotalSeconds, 2) * 100);
+                hub.Clients.Client(connectionId).SendAsync("Progress", percent, fileName, convertedFileName);
+                Debug.WriteLine(percent);
+            };
+
+            await filesToConvert[fileName].conversion.Start(filesToConvert[fileName].token.Token);
+        }
+
+        public void RemoveConversion(string fileName)
+        {
+            filesToConvert.Remove(fileName);
+        }
+
+        public string CancelConversion(string fileName)
+        {
+            filesToConvert[fileName].token.Cancel();
+            RemoveConversion(fileName);
+
+            return "Stoped conversion";
         }
 
         [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
