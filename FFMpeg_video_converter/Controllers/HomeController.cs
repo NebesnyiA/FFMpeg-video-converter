@@ -99,8 +99,9 @@ namespace FFMpeg_video_converter.Controllers
 
         public async Task ConvertFile(string fileName, string connectionId, string format, string resolution)
         {
+            string convertedFileName = Path.ChangeExtension(fileName, format);
             string inputFile = Path.Combine(_appEnvironment.WebRootPath, "Files", fileName);
-            string outputFile = Path.Combine(_appEnvironment.WebRootPath, "ConvertedFiles", Path.ChangeExtension(fileName, format));
+            string outputFile = Path.Combine(_appEnvironment.WebRootPath, "ConvertedFiles", convertedFileName);
 
             ConvertClass convertProcesses = new ConvertClass(inputFile, outputFile, format, resolution);
 
@@ -110,12 +111,11 @@ namespace FFMpeg_video_converter.Controllers
             filesToConvert[fileName].conversion.OnProgress += (sender, args) =>
             {
                 var percent = (int)(Math.Round(args.Duration.TotalSeconds / args.TotalLength.TotalSeconds, 2) * 100);
-                hub.Clients.Client(connectionId).SendAsync("Progress", percent, Path.ChangeExtension(fileName, "avi"));
+                hub.Clients.Client(connectionId).SendAsync("Progress", percent, fileName, convertedFileName);
                 Debug.WriteLine(percent);
             };
 
             await filesToConvert[fileName].conversion.Start(filesToConvert[fileName].token.Token);
-            RemoveConversion(fileName);
         }
 
         public void RemoveConversion(string fileName)
