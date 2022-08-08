@@ -23,6 +23,9 @@ namespace FFMpeg_video_converter.Controllers
         private readonly ILogger<HomeController> _logger;
         private IWebHostEnvironment _appEnvironment;
 
+        // request size set to 134 megabytes
+        private const int RequestSize = 1073741824;
+
         public static IHubContext<ProgressHub> hub;
         public static CancellationTokenSource token = new CancellationTokenSource();
 
@@ -55,8 +58,8 @@ namespace FFMpeg_video_converter.Controllers
 
 
         [HttpPost]
-        [RequestFormLimits(MultipartBodyLengthLimit = 1073741824)]
-        [RequestSizeLimit(1073741824)]
+        [RequestFormLimits(MultipartBodyLengthLimit = RequestSize)]
+        [RequestSizeLimit(RequestSize)]
         public async Task<string> UploadFile(IFormFile file)
         {
             if (file != null)
@@ -116,6 +119,27 @@ namespace FFMpeg_video_converter.Controllers
             };
 
             await filesToConvert[fileName].conversion.Start(filesToConvert[fileName].token.Token);
+        }
+
+        public void RemoveUploadedFile(string fileName)
+        {
+            string filePath = Path.Combine(_appEnvironment.WebRootPath, "Files", fileName);
+
+            if (System.IO.File.Exists(filePath))
+            {
+                System.IO.File.Delete(filePath);
+            }
+        }
+
+        public void RemoveConvertedFile(string fileName, string format)
+        {
+            string filePath = Path.Combine(_appEnvironment.WebRootPath, "ConvertedFiles", Path.ChangeExtension(fileName, format));
+
+            if (System.IO.File.Exists(filePath))
+            {
+                System.IO.File.Delete(filePath);
+            }
+            RemoveUploadedFile(fileName);
         }
 
         public void RemoveConversion(string fileName)
