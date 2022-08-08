@@ -13,11 +13,6 @@
             <label>FFMpeg video converter</label>
         </div>
 
-        <div class="file">
-            <label>FileName</label>
-            <label class="conversion-stopped">Conversion stopped</label>
-        </div>
-
         <div class="board">
 
             @foreach (var fileName in Model.FileList)
@@ -63,9 +58,19 @@
 
         hubConnection.start().then(() => {
             conId = hubConnection.connectionId;
-            alert(conId);
 
             StartConversion();
+        });
+
+        $(window).bind("beforeunload", function () {
+            var format = $('#format').val();
+
+            for (var i = 0; i < files.length; i++) {
+                $.ajax({
+                    url: "RemoveConvertedFile",
+                    data: { fileName: files[i], format: format }
+                });
+            }
         });
 
         function StartConversion() {
