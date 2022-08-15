@@ -16,7 +16,7 @@
             <div id="upload" style="display: flex; align-items: center">
                 <div class="upload-zone">
                     <img src="~/svg/upload.svg">
-                    <input id="file-input" type="file" name="file" multiple>
+                    <input id="file-input" type="file" name="file" multiple accept="video/*, video/mp4">
                     <label for="file-input">Choose file</label>
                     <span>or drop it here</span>
                 </div>
@@ -87,10 +87,15 @@
         });
 
         function RemoveFile(obj) {
-   
+
             var fileName = obj.value;
             var index = fileArray.indexOf(fileName);
             fileArray.splice(index);
+
+            $.ajax({
+                url: "/Home/RemoveUploadedFile",
+                data: { fileName: fileName }
+            });
 
             $(obj).parent().remove();
         }
