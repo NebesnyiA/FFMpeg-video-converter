@@ -31,7 +31,11 @@ namespace FFMpeg_video_converter.Utils
 
         public FileModel GetFileObject()
         {
+            // current model includes vars to control conversion
+
             FileModel file = new FileModel();
+
+            // token is used to stop conversion process
 
             file.token = new CancellationTokenSource();
             file.convertedFilePath = _output;
@@ -45,9 +49,14 @@ namespace FFMpeg_video_converter.Utils
         {
             await SetCodecs();
 
+            // set conversion object parameters
+            // includes file output and streams
+            //
+
             IConversion conversion = FFmpeg.Conversions.New()
                 .AddStream(_audioStream, _videoStream)
-                .SetOutput(_output);
+                .SetOutput(_output)
+                .SetOverwriteOutput(true);
 
             return conversion;
         }
@@ -55,18 +64,12 @@ namespace FFMpeg_video_converter.Utils
         private async Task SetCodecs()
         {
             IMediaInfo mediaInfo = await FFmpeg.GetMediaInfo(_input);
-            int width = 0;
-            int height = 0;
-            if(_resolution == "original")
-            {
-                width = mediaInfo.VideoStreams.FirstOrDefault().Width;
-                height = mediaInfo.VideoStreams.FirstOrDefault().Height;
-            }
-            else
-            {
-                width = Convert.ToInt32(_resolution.Split("x").First());
-                height = Convert.ToInt32(_resolution.Split("x").Last());
-            }
+            int width = GetWidth(mediaInfo);
+            int height = GetHeight(mediaInfo);
+
+
+            // set audio and video codecs acording to the format
+            //
 
             switch (_format) 
             {
@@ -83,6 +86,33 @@ namespace FFMpeg_video_converter.Utils
                     _audioStream = mediaInfo.AudioStreams.FirstOrDefault()?.SetCodec(AudioCodec.mp3);
                     break;
             }
+        }
+
+        // method uses resolution string to get new video width
+        private int GetWidth(IMediaInfo mediaInfo)
+        {
+            if (_resolution == "original")
+            {
+                return mediaInfo.VideoStreams.FirstOrDefault().Width;
+            }
+            else
+            {
+                return Convert.ToInt32(_resolution.Split("x").First());
+            }
+        }
+
+        // method uses resolution string to get new video height
+        private int GetHeight(IMediaInfo mediaInfo)
+        {
+            if (_resolution == "original")
+            {
+                return mediaInfo.VideoStreams.FirstOrDefault().Height;
+            }
+            else
+            {
+                return Convert.ToInt32(_resolution.Split("x").Last());
+            }
+
         }
     }
 }
